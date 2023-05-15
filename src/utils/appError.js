@@ -1,5 +1,6 @@
 const AppError = function (message, statusCode) {
-    Error.prototype.constructor.call(this, message);
+    Error.call(this, message);
+    this.name = 'AppError';
     this.message = message;
     this.statusCode = statusCode;
     this.isOperational = true;
