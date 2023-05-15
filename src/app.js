@@ -8,6 +8,8 @@ const rateLimit = require('express-rate-limit');
 const morgan = require('morgan');
 const { log } = require('mercedlogger');
 
+const connect = require('./db/connection');
+
 const app = express();
 
 const corsOptions = {
@@ -45,4 +47,5 @@ const start = () => {
     }
 };
 
+connect();
 start();
