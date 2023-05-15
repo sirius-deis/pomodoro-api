@@ -1,11 +1,19 @@
+const { log } = require('mercedlogger');
+
+const { MODE } = process.env;
+
 module.exports = catchAsync = fn => {
-    return (req, res, next) => {
-        fn(req, res, next).catch(error =>
-            res.status(error.statusCode ?? 400).json({
-                message: error.isOperational
-                    ? error.message
-                    : 'Something went wrong',
-            })
-        );
+    return async (req, res, next) => {
+        try {
+            await fn(req, res, next);
+        } catch (error) {
+            log.red('SERVER ERROR', error);
+            res.status(error.statusCode ?? 500).json({
+                message:
+                    error.isOperational || MODE === 'development'
+                        ? error.message
+                        : 'Something went wrong',
+            });
+        }
     };
 };
