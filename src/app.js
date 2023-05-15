@@ -9,6 +9,8 @@ const morgan = require('morgan');
 const { log } = require('mercedlogger');
 
 const connect = require('./db/connection');
+const AppError = require('./utils/appError');
+const userRouter = require('./routes/user.routes');
 
 const app = express();
 
@@ -23,6 +25,9 @@ const limiter = rateLimit({
     message: 'Too many request from this IP, please try again in an hour',
 });
 
+/**
+ * Middleware
+ */
 app.use(morgan('tiny'));
 app.use(cors(corsOptions));
 app.use(express.json({ limit: '10kb' }));
@@ -32,17 +37,27 @@ app.use(helmet());
 app.use(mongoSanitize());
 app.use(limiter);
 
-const { PORT = 3002 } = process.env.PORT;
+/**
+ * Routes
+ */
+app.use('/api/v1/users', userRouter);
+
+/**
+ * Not found route
+ */
+app.all('*', (req, res, next) => {
+    next(new AppError(`Can\'t find ${req.originalUrl} on this server`, 404));
+});
+
+const { PORT = 3000 } = process.env.PORT;
 
 const start = () => {
     try {
         app.listen(PORT, () => {
-            console.log(
-                log.green('SERVER STATE', `Server is running on port: ${PORT}`)
-            );
+            log.green('SERVER STATE', `Server is running on port: ${PORT}`);
         });
     } catch (error) {
-        console.log(log.red('SERVER STATE', error));
+        log.red('SERVER STATE', error);
         process.exit(1);
     }
 };

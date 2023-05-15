@@ -1,5 +1,6 @@
 const AppError = function (message, statusCode) {
-    Error.call(this, message);
+    Error.prototype.constructor.call(this, message);
+    this.message = message;
     this.statusCode = statusCode;
     this.isOperational = true;
     Error.captureStackTrace(this, this.constructor);
