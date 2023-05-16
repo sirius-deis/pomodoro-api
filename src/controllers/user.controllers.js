@@ -24,10 +24,33 @@ const signToken = id => {
     return jwt.sign({ id }, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN });
 };
 
-const comparePasswords = async (user, assumedPassword) => {
+const checkIfUserPasswordCorrect = async (user, assumedPassword) => {
     if (!user || !(await user.checkPassword(assumedPassword, user.password))) {
         throw new AppError('Incorrect email or password', 401);
     }
+};
+
+const checkIfPasswordsAreTheSame = (password1, password2) => {
+    if (password1 !== password2) {
+        throw new AppError(
+            'Passwords are different, please provide valid passwords',
+            400
+        );
+    }
+};
+
+const sendResponseWithToken = (user, req, res, statusCode, message) => {
+    const token = signToken(user.id);
+    res.cookie('token', token, {
+        expires: new Date(
+            Date.now() + parseInt(JWT_EXPIRES_IN) * 24 * 60 * 60 * 1000
+        ),
+    });
+
+    res.status(statusCode).json({
+        message,
+        data: { user },
+    });
 };
 
 exports.signup = catchAsync(async (req, res) => {
@@ -35,12 +58,7 @@ exports.signup = catchAsync(async (req, res) => {
 
     checkIfFieldsExist(email, password, passwordConfirm);
     checkIfFieldsAreNotEmpty(email, password, passwordConfirm);
-    if (password !== passwordConfirm) {
-        throw new AppError(
-            'Password are different, please provide valid passwords',
-            400
-        );
-    }
+    checkIfPasswordsAreTheSame(password, passwordConfirm);
     await User.create({ email, password });
     res.status(201).json({ message: 'Account was successfully created' });
 });
@@ -51,7 +69,7 @@ exports.login = catchAsync(async (req, res) => {
     checkIfFieldsExist(email, password);
     checkIfFieldsAreNotEmpty(email, password);
     const user = await User.findOne({ email }).select('+password -__v');
-    await comparePasswords(user, password);
+    await checkIfUserPasswordCorrect(user, password);
 
     user.password = undefined;
     res.cookie('token', signToken(user._id), {
@@ -59,10 +77,13 @@ exports.login = catchAsync(async (req, res) => {
             Date.now() + parseInt(JWT_EXPIRES_IN) * 24 * 60 * 60 * 1000
         ),
     });
-
-    return res
-        .status(200)
-        .json({ message: 'You was logged in successfully', data: { user } });
+    sendResponseWithToken(
+        user,
+        req,
+        res,
+        200,
+        'You was logged in successfully'
+    );
 });
 
 exports.delete = catchAsync(async (req, res) => {
@@ -74,7 +95,7 @@ exports.delete = catchAsync(async (req, res) => {
     checkIfFieldsExist(password);
     checkIfFieldsAreNotEmpty(password);
     const user = await User.findById(id).select('+password -__v');
-    await comparePasswords(user, password);
+    await checkIfUserPasswordCorrect(user, password);
     await User.findByIdAndRemove(user._id);
     res.clearCookie('token');
 
@@ -85,3 +106,33 @@ exports.logout = catchAsync(async (req, res) => {
     res.clearCookie('token');
     res.redirect('/');
 });
+
+exports.updatePassword = catchAsync(async (req, res) => {
+    const { id } = req.user;
+    const { passwordConfirm, newPassword, newPasswordConfirm } = req.body;
+    checkIfFieldsExist(passwordConfirm, newPassword, newPasswordConfirm);
+    checkIfFieldsAreNotEmpty(passwordConfirm, newPassword, newPasswordConfirm);
+    const user = await User.findById(id).select('+password -__v');
+    await checkIfUserPasswordCorrect(user, passwordConfirm);
+    checkIfPasswordsAreTheSame(newPassword, newPasswordConfirm);
+    if (passwordConfirm === newPassword) {
+        throw new AppError(
+            "A new password can't be the same as the previous",
+            400
+        );
+    }
+
+    user.password = newPassword;
+    console.log(user);
+    await user.save();
+
+    sendResponseWithToken(
+        user,
+        req,
+        res,
+        200,
+        "You'r password was updated successfully"
+    );
+});
+
+exports.forgotPassword = catchAsync(async (req, res) => {});

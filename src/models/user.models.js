@@ -29,6 +29,7 @@ UserSchema.pre('save', function (next) {
         return next();
     }
     this.passwordChangedAt = Date.now() - 1000;
+    next();
 });
 
 UserSchema.pre('save', async function (next) {
