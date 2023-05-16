@@ -9,6 +9,7 @@ const morgan = require('morgan');
 const { log } = require('mercedlogger');
 
 const connect = require('./db/connection');
+const catchAsync = require('./utils/catchAsync');
 const AppError = require('./utils/appError');
 const userRouter = require('./routes/user.routes');
 
@@ -45,9 +46,15 @@ app.use('/api/v1/users', userRouter);
 /**
  * Not found route
  */
-app.all('*', (req, res, next) => {
-    next(new AppError(`Can\'t find ${req.originalUrl} on this server`, 404));
-});
+app.all(
+    '*',
+    catchAsync(req => {
+        throw new AppError(
+            `Can\'t find ${req.originalUrl} on this server`,
+            404
+        );
+    })
+);
 
 const { PORT = 3000 } = process.env.PORT;
 
