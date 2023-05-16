@@ -1,8 +1,7 @@
 const mongoose = require('mongoose');
 const { log } = require('mercedlogger');
 
-const { DB_NAME } = process.env.DB_NAME;
-
+const { DB_NAME } = process.env;
 const connect = () => {
     mongoose.connect(`mongodb://localhost:27017/${DB_NAME}`, {
         useNewUrlParser: true,

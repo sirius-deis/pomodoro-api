@@ -6,8 +6,9 @@ const catchAsync = require('../utils/catchAsync');
 const AppError = require('../utils/appError');
 const User = require('../models/user.models');
 const Token = require('../models/token.models');
+const sendEmail = require('../utils/email');
 
-const { JWT_SECRET, JWT_EXPIRES_IN, BCRYPT_SALT } = process.env;
+const { JWT_SECRET, JWT_EXPIRES_IN, BCRYPT_SALT, PORT } = process.env;
 
 const checkIfFieldsExist = (...fields) => {
     const isNotValid = fields.some(field => !field);
@@ -162,8 +163,8 @@ exports.forgotPassword = catchAsync(async (req, res) => {
     const hash = await createResetToken();
     await Token.create({ userId: user._id, token: hash });
 
-    const link = `${req.protocol}/${req.baseUrl}/reset-password/${hash}`;
-
+    const link = `${req.protocol}://${req.hostname}:${PORT}${req.baseUrl}/reset-password/${hash}`;
+    await sendEmail(user.email, 'Password reset token', link);
     res.status(200).json({ message: 'Token was sent to email' });
 });
 
@@ -173,7 +174,6 @@ exports.resetPassword = catchAsync(async (req, res) => {
 
     const token = await Token.findOne({
         token: tokenFromParams,
-        createdAt: { $gt: Date.now() },
     });
 
     if (!token) {
