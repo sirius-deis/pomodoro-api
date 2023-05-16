@@ -13,6 +13,7 @@ const UserSchema = new mongoose.Schema(
             ],
             lowercase: true,
             unique: true,
+            min: [5, "Email can't be less then 5 characters"],
         },
         password: {
             type: String,
@@ -20,6 +21,7 @@ const UserSchema = new mongoose.Schema(
                 'true',
                 "This field can't be blank. Please provide a strong password",
             ],
+            min: [5, "Password can't be less then 5 characters"],
         },
         passwordChangedAt: {
             type: Date,
