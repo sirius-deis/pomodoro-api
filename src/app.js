@@ -11,7 +11,9 @@ const { log } = require('mercedlogger');
 const connect = require('./db/connection');
 const catchAsync = require('./utils/catchAsync');
 const AppError = require('./utils/appError');
+const isLoggedIn = require('./middlewares/auth.middlewares');
 const userRouter = require('./routes/user.routes');
+const taskRouter = require('./routes/task.routes');
 
 const app = express();
 
@@ -42,6 +44,7 @@ app.use(limiter);
  * Routes
  */
 app.use('/api/v1/users', userRouter);
+app.use('/api/v1/tasks', isLoggedIn, taskRouter);
 
 /**
  * Not found route

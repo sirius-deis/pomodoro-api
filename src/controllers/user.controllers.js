@@ -113,7 +113,7 @@ exports.delete = catchAsync(async (req, res) => {
     checkIfFieldsAreNotEmpty(password);
     const user = await User.findById(id).select('+password -__v');
     await checkIfUserPasswordCorrect(user, password);
-    await User.findByIdAndRemove(user._id);
+    await user.deleteOne();
     res.clearCookie('token');
 
     res.redirect(204, '/');
@@ -140,7 +140,6 @@ exports.updatePassword = catchAsync(async (req, res) => {
     }
 
     user.password = newPassword;
-    console.log(user);
     await user.save();
 
     sendResponseWithToken(

@@ -15,18 +15,24 @@ const TaskSchema = new mongoose.Schema({
         required: true,
         min: [1, "This field can't be neither 0, nor negative number"],
     },
-    timersDone: {
+    timesDone: {
         type: Number,
         required: true,
         validate: {
             validator: function (value) {
-                return this.time < value;
+                return this.times >= value;
             },
             message: "Times of done can't be more then times itself",
         },
     },
     note: {
         type: String,
+    },
+    userId: {
+        type: mongoose.SchemaTypes.ObjectId,
+        required: true,
+        ref: 'user',
+        select: false,
     },
 });
 
