@@ -1,10 +1,13 @@
 const jwt = require('jsonwebtoken');
+const bcrypt = require('bcrypt');
+const crypto = require('crypto');
 
 const catchAsync = require('../utils/catchAsync');
 const AppError = require('../utils/appError');
 const User = require('../models/user.models');
+const Token = require('../models/token.models');
 
-const { JWT_SECRET, JWT_EXPIRES_IN } = process.env;
+const { JWT_SECRET, JWT_EXPIRES_IN, BCRYPT_SALT } = process.env;
 
 const checkIfFieldsExist = (...fields) => {
     const isNotValid = fields.some(field => !field);
@@ -53,6 +56,19 @@ const sendResponseWithToken = (user, req, res, statusCode, message) => {
     });
 };
 
+const deleteResetTokenIfExist = async userId => {
+    const token = await Token.findOne({ userId });
+    if (token) {
+        await token.deleteOne();
+    }
+};
+
+const createResetToken = async () => {
+    const resetToken = crypto.randomBytes(32).toString('hex');
+    const hash = await bcrypt.hash(resetToken, +BCRYPT_SALT);
+    return hash;
+};
+
 exports.signup = catchAsync(async (req, res) => {
     const { email, password, passwordConfirm } = req.body;
 
@@ -60,7 +76,7 @@ exports.signup = catchAsync(async (req, res) => {
     checkIfFieldsAreNotEmpty(email, password, passwordConfirm);
     checkIfPasswordsAreTheSame(password, passwordConfirm);
     await User.create({ email, password });
-    res.status(201).json({ message: 'Account was successfully created' });
+    res.redirect(201, '/login');
 });
 
 exports.login = catchAsync(async (req, res) => {
@@ -99,7 +115,7 @@ exports.delete = catchAsync(async (req, res) => {
     await User.findByIdAndRemove(user._id);
     res.clearCookie('token');
 
-    res.status(204).json({ message: 'Your account was deleted successfully' });
+    res.redirect(204, '/');
 });
 
 exports.logout = catchAsync(async (req, res) => {
@@ -135,4 +151,45 @@ exports.updatePassword = catchAsync(async (req, res) => {
     );
 });
 
-exports.forgotPassword = catchAsync(async (req, res) => {});
+exports.forgotPassword = catchAsync(async (req, res) => {
+    const { email } = req.body;
+    const user = await User.findOne({ email });
+
+    if (!user) {
+        throw new AppError('There is no user with such email address', 404);
+    }
+    await deleteResetTokenIfExist(user._id);
+    const hash = await createResetToken();
+    await Token.create({ userId: user._id, token: hash });
+
+    const link = `${req.protocol}/${req.baseUrl}/reset-password/${hash}`;
+
+    res.status(200).json({ message: 'Token was sent to email' });
+});
+
+exports.resetPassword = catchAsync(async (req, res) => {
+    const { token: tokenFromParams } = req.params;
+    const { newPassword, newPasswordConfirm } = req.body;
+
+    const token = await Token.findOne({
+        token: tokenFromParams,
+        createdAt: { $gt: Date.now() },
+    });
+
+    if (!token) {
+        throw new Error('Token is invalid or has expired', 400);
+    }
+
+    checkIfFieldsExist(newPassword, newPasswordConfirm);
+    checkIfFieldsAreNotEmpty(newPassword, newPasswordConfirm);
+    checkIfPasswordsAreTheSame(newPassword, newPasswordConfirm);
+
+    const user = await User.findById(token.userId);
+    user.password = newPassword;
+
+    await user.save();
+
+    await token.deleteOne();
+
+    res.redirect(200, '/');
+});

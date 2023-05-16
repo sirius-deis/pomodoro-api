@@ -9,5 +9,7 @@ userRouter.post('/login', userController.login);
 userRouter.post('/delete', isLoggedIn, userController.delete);
 userRouter.post('/logout', isLoggedIn, userController.logout);
 userRouter.post('/update-password', isLoggedIn, userController.updatePassword);
+userRouter.post('/forgot-password', userController.forgotPassword);
+userRouter.post('/reset-password/:token', userController.resetPassword);
 
 module.exports = userRouter;
