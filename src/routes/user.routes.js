@@ -11,5 +11,11 @@ userRouter.post('/logout', isLoggedIn, userController.logout);
 userRouter.post('/update-password', isLoggedIn, userController.updatePassword);
 userRouter.post('/forgot-password', userController.forgotPassword);
 userRouter.post('/reset-password/:token', userController.resetPassword);
+userRouter.post(
+    '/upload-photo',
+    isLoggedIn,
+    userController.uploadUserPhotoMiddleware,
+    userController.uploadUserPhoto
+);
 
 module.exports = userRouter;

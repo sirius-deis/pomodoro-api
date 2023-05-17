@@ -31,7 +31,12 @@ const limiter = rateLimit({
 /**
  * Middleware
  */
-app.use(morgan('tiny'));
+
+if (process.env.NODE_ENV === 'development') {
+    app.use(morgan('dev'));
+} else {
+    app.use(morgan('tiny'));
+}
 app.use(cors(corsOptions));
 app.use(express.json({ limit: '10kb' }));
 app.use(express.urlencoded({ extended: true }));

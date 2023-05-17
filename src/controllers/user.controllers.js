@@ -1,6 +1,10 @@
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcrypt');
 const crypto = require('crypto');
+const multer = require('multer');
+const sharp = require('sharp');
+const path = require('path');
+const fs = require('fs').promises;
 
 const catchAsync = require('../utils/catchAsync');
 const AppError = require('../utils/appError');
@@ -8,8 +12,19 @@ const User = require('../models/user.models');
 const Token = require('../models/token.models');
 const sendEmail = require('../utils/email');
 
-const { JWT_SECRET, JWT_EXPIRES_IN, BCRYPT_SALT, PORT } = process.env;
+/**
+ * Config
+ */
+const multerStorage = multer.memoryStorage();
 
+const upload = multer({ storage: multerStorage });
+
+const { JWT_SECRET, JWT_EXPIRES_IN, BCRYPT_SALT, PORT, IMG_FOLDER } =
+    process.env;
+
+/**
+ * Helper functions
+ */
 const checkIfFieldsExist = (...fields) => {
     const isNotValid = fields.some(field => !field);
     if (isNotValid) {
@@ -70,6 +85,9 @@ const createResetToken = async () => {
     return hash;
 };
 
+/**
+ * Controllers
+ */
 exports.signup = catchAsync(async (req, res) => {
     const { email, password, passwordConfirm } = req.body;
 
@@ -89,6 +107,7 @@ exports.login = catchAsync(async (req, res) => {
     await checkIfUserPasswordCorrect(user, password);
 
     user.password = undefined;
+
     res.cookie('token', signToken(user._id), {
         expires: new Date(
             Date.now() + parseInt(JWT_EXPIRES_IN) * 24 * 60 * 60 * 1000
@@ -113,6 +132,10 @@ exports.delete = catchAsync(async (req, res) => {
     checkIfFieldsAreNotEmpty(password);
     const user = await User.findById(id).select('+password -__v');
     await checkIfUserPasswordCorrect(user, password);
+    try {
+        const photoPath = user.profilePicture;
+        await fs.unlink(path.resolve(__dirname, '..', photoPath));
+    } catch {}
     await user.deleteOne();
     res.clearCookie('token');
 
@@ -191,4 +214,50 @@ exports.resetPassword = catchAsync(async (req, res) => {
     await token.deleteOne();
 
     res.redirect(200, '/');
+});
+
+exports.uploadUserPhotoMiddleware = upload.single('photo');
+
+exports.uploadUserPhoto = catchAsync(async (req, res) => {
+    if (!req.file) {
+        throw new AppError(
+            'Image should be provided! Please provide an image',
+            400
+        );
+    }
+    if (!req.file.mimetype.startsWith('image')) {
+        throw new AppError('Not an image! Please provide an image', 400);
+    }
+
+    const { id } = req.user;
+    const dirPath = path.resolve(__dirname, '..', IMG_FOLDER);
+
+    try {
+        await fs.access(`${dirPath}`);
+    } catch {
+        await fs.mkdir(`${dirPath}`, {
+            recursive: true,
+        });
+    }
+
+    const { buffer, originalname } = req.file;
+    const timestamp = new Date().toISOString();
+    const name = `${timestamp}-${originalname}`;
+
+    const user = await User.findById(id);
+    const currentPath = user.profilePicture;
+
+    user.profilePicture = `${IMG_FOLDER}/${name}`;
+    await user.save();
+    try {
+        await fs.unlink(path.resolve(__dirname, '..', currentPath));
+    } catch {}
+
+    await sharp(buffer)
+        .resize(200, 200)
+        .toFormat('jpeg')
+        .jpeg({ quality: 50 })
+        .toFile(`${dirPath}/${name}`);
+
+    res.status(201).json({ message: 'Photo was updated successfully' });
 });
