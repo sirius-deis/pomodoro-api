@@ -15,6 +15,14 @@ module.exports = isLoggedIn = catchAsync(async (req, res, next) => {
     if (!payload) {
         return next(new AppError('Token verification failed', 401));
     }
-    req.user = await User.findById(payload.id).select('+password');
+    const user = await User.findById(payload.id).select('+password');
+
+    if (user.passwordChangedAt > new Date(payload.iat)) {
+        return next(
+            new AppError('Password was changed. Please login again', 400)
+        );
+    }
+
+    req.user = user;
     next();
 });
