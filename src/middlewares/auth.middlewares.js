@@ -2,10 +2,11 @@ const jwt = require('jsonwebtoken');
 
 const catchAsync = require('../utils/catchAsync');
 const AppError = require('../utils/appError');
+const User = require('../models/user.models');
 
 const { JWT_SECRET } = process.env;
 
-module.exports = isLoggedIn = catchAsync((req, res, next) => {
+module.exports = isLoggedIn = catchAsync(async (req, res, next) => {
     const { token } = req.cookies;
     if (!token) {
         return next(new AppError('Sign in before accessing this route', 401));
@@ -14,6 +15,6 @@ module.exports = isLoggedIn = catchAsync((req, res, next) => {
     if (!payload) {
         return next(new AppError('Token verification failed', 401));
     }
-    req.user = payload;
+    req.user = await User.findById(payload.id).select('+password');
     next();
 });

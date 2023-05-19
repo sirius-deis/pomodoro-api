@@ -3,6 +3,8 @@ const AppError = require('../utils/appError');
 
 const Task = require('../models/task.models');
 
+const utils = require('../utils/utils');
+
 const updateField = (entity, name, value) => {
     if (value && entity[name] !== value) {
         entity[name] = value;
@@ -10,8 +12,8 @@ const updateField = (entity, name, value) => {
 };
 
 exports.getTasks = catchAsync(async (req, res) => {
-    const { id } = req.user;
-    const tasks = await Task.find({ userId: id }).select('-__v');
+    const user = req.user;
+    const tasks = await Task.find({ userId: user._id }).select('-__v');
 
     res.status(200).json({
         message: 'Tasks were retrieved successfully',
@@ -20,7 +22,7 @@ exports.getTasks = catchAsync(async (req, res) => {
 });
 
 exports.addTask = catchAsync(async (req, res) => {
-    const { id } = req.user;
+    const user = req.user;
     const { title, isDone, times, timesDone, note } = req.body;
     if (title.trim().length < 7) {
         return next(
@@ -38,7 +40,14 @@ exports.addTask = catchAsync(async (req, res) => {
             )
         );
     }
-    await Task.create({ title, isDone, times, timesDone, note, userId: id });
+    await Task.create({
+        title,
+        isDone,
+        times,
+        timesDone,
+        note,
+        userId: user._id,
+    });
 
     res.status(201).json({
         message: 'Task was created successfully',
@@ -46,15 +55,17 @@ exports.addTask = catchAsync(async (req, res) => {
 });
 
 exports.clearTasks = catchAsync(async (req, res) => {
-    const { id } = req.user;
-    await Task.deleteMany({ userId: id });
+    const user = req.user;
+    await Task.deleteMany({ userId: user._id });
 
     res.status(204).json({ message: 'All your tasks were completely deleted' });
 });
 
 exports.updateTask = catchAsync(async (req, res) => {
     const { taskId } = req.params;
+    const user = req.user;
     const { title, isDone, times, timesDone, note } = req.body;
+    utils.checkIfFieldsExist(next, title, isDone, times, timesDone);
     if (!title && !isDone && !times && !timesDone && !note) {
         return next(
             new AppError(
@@ -66,6 +77,9 @@ exports.updateTask = catchAsync(async (req, res) => {
     const task = await Task.findById(taskId);
     if (!task) {
         return next(new AppError('There is no such task', 404));
+    }
+    if (task.userId !== user._id) {
+        return next(new AppError('You can only update your own tasks', 404));
     }
     updateField(task, 'title', title);
     updateField(task, 'isDone', isDone);
@@ -81,9 +95,13 @@ exports.updateTask = catchAsync(async (req, res) => {
 
 exports.deleteTask = catchAsync(async (req, res) => {
     const { taskId } = req.params;
+    const user = req.user;
     const task = await Task.findById(taskId);
     if (!task) {
         return next(new AppError('There is no such task', 404));
+    }
+    if (task.userId !== user._id) {
+        return next(new AppError('You can only delete your own tasks', 404));
     }
 
     await task.deleteOne();

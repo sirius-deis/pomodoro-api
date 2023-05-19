@@ -11,6 +11,7 @@ const AppError = require('../utils/appError');
 const User = require('../models/user.models');
 const Token = require('../models/token.models');
 const sendEmail = require('../utils/email');
+const utils = require('../utils/utils');
 
 /**
  * Config
@@ -25,14 +26,6 @@ const { JWT_SECRET, JWT_EXPIRES_IN, BCRYPT_SALT, PORT, IMG_FOLDER } =
 /**
  * Helper functions
  */
-const checkIfFieldsExist = (next, ...fields) => {
-    const isNotValid = fields.some(field => !field);
-    if (isNotValid) {
-        return next(
-            new AppError('Please provide all fields with valid data', 400)
-        );
-    }
-};
 
 const checkIfFieldsAreNotEmpty = (next, ...fields) => {
     const isNotValid = fields.some(field => !(field.length >= 5));
@@ -96,7 +89,7 @@ const createResetToken = async () => {
 exports.signup = catchAsync(async (req, res, next) => {
     const { email, password, passwordConfirm } = req.body;
 
-    checkIfFieldsExist(next, email, password, passwordConfirm);
+    utils.checkIfFieldsExist(next, email, password, passwordConfirm);
     checkIfFieldsAreNotEmpty(next, email, password, passwordConfirm);
     checkIfPasswordsAreTheSame(next, password, passwordConfirm);
     await User.create({ email, password });
@@ -106,7 +99,7 @@ exports.signup = catchAsync(async (req, res, next) => {
 exports.login = catchAsync(async (req, res, next) => {
     const { email, password } = req.body;
 
-    checkIfFieldsExist(next, email, password);
+    utils.checkIfFieldsExist(next, email, password);
     checkIfFieldsAreNotEmpty(next, email, password);
     const user = await User.findOne({ email }).select('+password -__v');
     await checkIfUserPasswordCorrect(next, user, password);
@@ -126,16 +119,11 @@ exports.login = catchAsync(async (req, res, next) => {
 });
 
 exports.delete = catchAsync(async (req, res, next) => {
-    const { id } = req.user;
+    const user = req.user;
     const { password } = req.body;
-    if (!id) {
-        return next(
-            new AppError('You must be signed in for this operation', 401)
-        );
-    }
-    checkIfFieldsExist(next, password);
+
+    utils.checkIfFieldsExist(next, password);
     checkIfFieldsAreNotEmpty(next, password);
-    const user = await User.findById(id).select('+password -__v');
     await checkIfUserPasswordCorrect(next, user, password);
     try {
         const photoPath = user.profilePicture;
@@ -153,16 +141,21 @@ exports.logout = catchAsync(async (req, res) => {
 });
 
 exports.updatePassword = catchAsync(async (req, res, next) => {
-    const { id } = req.user;
+    const user = req.user;
     const { passwordConfirm, newPassword, newPasswordConfirm } = req.body;
-    checkIfFieldsExist(next, passwordConfirm, newPassword, newPasswordConfirm);
+    utils.checkIfFieldsExist(
+        next,
+        passwordConfirm,
+        newPassword,
+        newPasswordConfirm
+    );
     checkIfFieldsAreNotEmpty(
         next,
         passwordConfirm,
         newPassword,
         newPasswordConfirm
     );
-    const user = await User.findById(id).select('+password -__v');
+
     await checkIfUserPasswordCorrect(next, user, passwordConfirm);
     checkIfPasswordsAreTheSame(next, newPassword, newPasswordConfirm);
     if (passwordConfirm === newPassword) {
@@ -216,7 +209,7 @@ exports.resetPassword = catchAsync(async (req, res) => {
         return next(new AppError('Token is invalid or has expired', 400));
     }
 
-    checkIfFieldsExist(next, newPassword, newPasswordConfirm);
+    utils.checkIfFieldsExist(next, newPassword, newPasswordConfirm);
     checkIfFieldsAreNotEmpty(next, newPassword, newPasswordConfirm);
     checkIfPasswordsAreTheSame(next, newPassword, newPasswordConfirm);
 
@@ -243,7 +236,7 @@ exports.uploadUserPhoto = catchAsync(async (req, res) => {
         return next(new AppError('Not an image! Please provide an image', 400));
     }
 
-    const { id } = req.user;
+    const user = req.user;
     const dirPath = path.resolve(__dirname, '..', IMG_FOLDER);
 
     try {
@@ -258,7 +251,6 @@ exports.uploadUserPhoto = catchAsync(async (req, res) => {
     const timestamp = new Date().toISOString();
     const name = `${timestamp}-${originalname}`;
 
-    const user = await User.findById(id);
     const currentPath = user.profilePicture;
 
     user.profilePicture = `${IMG_FOLDER}/${name}`;
