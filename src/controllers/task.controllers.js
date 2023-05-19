@@ -23,15 +23,19 @@ exports.addTask = catchAsync(async (req, res) => {
     const { id } = req.user;
     const { title, isDone, times, timesDone, note } = req.body;
     if (title.trim().length < 7) {
-        throw new AppError(
-            "Title can't be empty. Please provide valid title for your task",
-            400
+        return next(
+            new AppError(
+                "Title can't be empty. Please provide valid title for your task",
+                400
+            )
         );
     }
     if (times <= 0 || timesDone < 0) {
-        throw new AppError(
-            "Neither times, nor times done can't be a number which less than 1",
-            400
+        return next(
+            new AppError(
+                "Neither times, nor times done can't be a number which less than 1",
+                400
+            )
         );
     }
     await Task.create({ title, isDone, times, timesDone, note, userId: id });
@@ -52,14 +56,16 @@ exports.updateTask = catchAsync(async (req, res) => {
     const { taskId } = req.params;
     const { title, isDone, times, timesDone, note } = req.body;
     if (!title && !isDone && !times && !timesDone && !note) {
-        throw new AppError(
-            'You need provide at least one field which should be changed',
-            404
+        return next(
+            new AppError(
+                'You need provide at least one field which should be changed',
+                404
+            )
         );
     }
     const task = await Task.findById(taskId);
     if (!task) {
-        throw new AppError('There is no such task', 404);
+        return next(new AppError('There is no such task', 404));
     }
     updateField(task, 'title', title);
     updateField(task, 'isDone', isDone);
@@ -77,7 +83,7 @@ exports.deleteTask = catchAsync(async (req, res) => {
     const { taskId } = req.params;
     const task = await Task.findById(taskId);
     if (!task) {
-        throw new AppError('There is no such task', 404);
+        return next(new AppError('There is no such task', 404));
     }
 
     await task.deleteOne();

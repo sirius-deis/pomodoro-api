@@ -15,6 +15,8 @@ const isLoggedIn = require('./middlewares/auth.middlewares');
 const userRouter = require('./routes/user.routes');
 const taskRouter = require('./routes/task.routes');
 
+const errorGlobalHandler = require('./controllers/error.controllers');
+
 const app = express();
 
 const corsOptions = {
@@ -54,15 +56,13 @@ app.use('/api/v1/tasks', isLoggedIn, taskRouter);
 /**
  * Not found route
  */
-app.all(
-    '*',
-    catchAsync(req => {
-        throw new AppError(
-            `Can\'t find ${req.originalUrl} on this server`,
-            404
-        );
-    })
-);
+app.all('*', (req, res, next) => {
+    return next(
+        new AppError(`Can\'t find ${req.originalUrl} on this server`, 404)
+    );
+});
+
+app.use(errorGlobalHandler);
 
 const { PORT = 3000 } = process.env.PORT;
 

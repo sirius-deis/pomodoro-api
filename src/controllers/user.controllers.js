@@ -25,17 +25,19 @@ const { JWT_SECRET, JWT_EXPIRES_IN, BCRYPT_SALT, PORT, IMG_FOLDER } =
 /**
  * Helper functions
  */
-const checkIfFieldsExist = (...fields) => {
+const checkIfFieldsExist = (next, ...fields) => {
     const isNotValid = fields.some(field => !field);
     if (isNotValid) {
-        throw new AppError('Please provide all fields with valid data', 400);
+        return next(
+            new AppError('Please provide all fields with valid data', 400)
+        );
     }
 };
 
-const checkIfFieldsAreNotEmpty = (...fields) => {
+const checkIfFieldsAreNotEmpty = (next, ...fields) => {
     const isNotValid = fields.some(field => !(field.length >= 5));
     if (isNotValid) {
-        throw new AppError('Please provide valid data', 400);
+        return next(new AppError('Please provide valid data', 400));
     }
 };
 
@@ -43,17 +45,19 @@ const signToken = id => {
     return jwt.sign({ id }, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN });
 };
 
-const checkIfUserPasswordCorrect = async (user, assumedPassword) => {
+const checkIfUserPasswordCorrect = async (next, user, assumedPassword) => {
     if (!user || !(await user.checkPassword(assumedPassword, user.password))) {
-        throw new AppError('Incorrect email or password', 401);
+        return next(new AppError('Incorrect email or password', 401));
     }
 };
 
-const checkIfPasswordsAreTheSame = (password1, password2) => {
+const checkIfPasswordsAreTheSame = (next, password1, password2) => {
     if (password1 !== password2) {
-        throw new AppError(
-            'Passwords are different, please provide valid passwords',
-            400
+        return next(
+            new AppError(
+                'Passwords are different, please provide valid passwords',
+                400
+            )
         );
     }
 };
@@ -66,6 +70,7 @@ const sendResponseWithToken = (user, req, res, statusCode, message) => {
         ),
     });
 
+    user.password = undefined;
     res.status(statusCode).json({
         message,
         data: { user },
@@ -88,25 +93,23 @@ const createResetToken = async () => {
 /**
  * Controllers
  */
-exports.signup = catchAsync(async (req, res) => {
+exports.signup = catchAsync(async (req, res, next) => {
     const { email, password, passwordConfirm } = req.body;
 
-    checkIfFieldsExist(email, password, passwordConfirm);
-    checkIfFieldsAreNotEmpty(email, password, passwordConfirm);
-    checkIfPasswordsAreTheSame(password, passwordConfirm);
+    checkIfFieldsExist(next, email, password, passwordConfirm);
+    checkIfFieldsAreNotEmpty(next, email, password, passwordConfirm);
+    checkIfPasswordsAreTheSame(next, password, passwordConfirm);
     await User.create({ email, password });
     res.redirect(201, '/login');
 });
 
-exports.login = catchAsync(async (req, res) => {
+exports.login = catchAsync(async (req, res, next) => {
     const { email, password } = req.body;
 
-    checkIfFieldsExist(email, password);
-    checkIfFieldsAreNotEmpty(email, password);
+    checkIfFieldsExist(next, email, password);
+    checkIfFieldsAreNotEmpty(next, email, password);
     const user = await User.findOne({ email }).select('+password -__v');
-    await checkIfUserPasswordCorrect(user, password);
-
-    user.password = undefined;
+    await checkIfUserPasswordCorrect(next, user, password);
 
     res.cookie('token', signToken(user._id), {
         expires: new Date(
@@ -122,16 +125,18 @@ exports.login = catchAsync(async (req, res) => {
     );
 });
 
-exports.delete = catchAsync(async (req, res) => {
+exports.delete = catchAsync(async (req, res, next) => {
     const { id } = req.user;
     const { password } = req.body;
     if (!id) {
-        throw new AppError('You must be signed in for this operation', 401);
+        return next(
+            new AppError('You must be signed in for this operation', 401)
+        );
     }
-    checkIfFieldsExist(password);
-    checkIfFieldsAreNotEmpty(password);
+    checkIfFieldsExist(next, password);
+    checkIfFieldsAreNotEmpty(next, password);
     const user = await User.findById(id).select('+password -__v');
-    await checkIfUserPasswordCorrect(user, password);
+    await checkIfUserPasswordCorrect(next, user, password);
     try {
         const photoPath = user.profilePicture;
         await fs.unlink(path.resolve(__dirname, '..', photoPath));
@@ -147,18 +152,25 @@ exports.logout = catchAsync(async (req, res) => {
     res.redirect('/');
 });
 
-exports.updatePassword = catchAsync(async (req, res) => {
+exports.updatePassword = catchAsync(async (req, res, next) => {
     const { id } = req.user;
     const { passwordConfirm, newPassword, newPasswordConfirm } = req.body;
-    checkIfFieldsExist(passwordConfirm, newPassword, newPasswordConfirm);
-    checkIfFieldsAreNotEmpty(passwordConfirm, newPassword, newPasswordConfirm);
+    checkIfFieldsExist(next, passwordConfirm, newPassword, newPasswordConfirm);
+    checkIfFieldsAreNotEmpty(
+        next,
+        passwordConfirm,
+        newPassword,
+        newPasswordConfirm
+    );
     const user = await User.findById(id).select('+password -__v');
-    await checkIfUserPasswordCorrect(user, passwordConfirm);
-    checkIfPasswordsAreTheSame(newPassword, newPasswordConfirm);
+    await checkIfUserPasswordCorrect(next, user, passwordConfirm);
+    checkIfPasswordsAreTheSame(next, newPassword, newPasswordConfirm);
     if (passwordConfirm === newPassword) {
-        throw new AppError(
-            "A new password can't be the same as the previous",
-            400
+        return next(
+            new AppError(
+                "A new password can't be the same as the previous",
+                400
+            )
         );
     }
 
@@ -174,12 +186,14 @@ exports.updatePassword = catchAsync(async (req, res) => {
     );
 });
 
-exports.forgotPassword = catchAsync(async (req, res) => {
+exports.forgotPassword = catchAsync(async (req, res, next) => {
     const { email } = req.body;
     const user = await User.findOne({ email });
 
     if (!user) {
-        throw new AppError('There is no user with such email address', 404);
+        return next(
+            new AppError('There is no user with such email address', 404)
+        );
     }
     await deleteResetTokenIfExist(user._id);
     const hash = await createResetToken();
@@ -199,12 +213,12 @@ exports.resetPassword = catchAsync(async (req, res) => {
     });
 
     if (!token) {
-        throw new Error('Token is invalid or has expired', 400);
+        return next(new AppError('Token is invalid or has expired', 400));
     }
 
-    checkIfFieldsExist(newPassword, newPasswordConfirm);
-    checkIfFieldsAreNotEmpty(newPassword, newPasswordConfirm);
-    checkIfPasswordsAreTheSame(newPassword, newPasswordConfirm);
+    checkIfFieldsExist(next, newPassword, newPasswordConfirm);
+    checkIfFieldsAreNotEmpty(next, newPassword, newPasswordConfirm);
+    checkIfPasswordsAreTheSame(next, newPassword, newPasswordConfirm);
 
     const user = await User.findById(token.userId);
     user.password = newPassword;
@@ -226,7 +240,7 @@ exports.uploadUserPhoto = catchAsync(async (req, res) => {
         );
     }
     if (!req.file.mimetype.startsWith('image')) {
-        throw new AppError('Not an image! Please provide an image', 400);
+        return next(new AppError('Not an image! Please provide an image', 400));
     }
 
     const { id } = req.user;
