@@ -1,4 +1,3 @@
-require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const cookieParse = require('cookie-parser');
@@ -6,10 +5,6 @@ const helmet = require('helmet');
 const mongoSanitize = require('express-mongo-sanitize');
 const rateLimit = require('express-rate-limit');
 const morgan = require('morgan');
-const { log } = require('mercedlogger');
-
-const connect = require('./db/connection');
-const catchAsync = require('./utils/catchAsync');
 const AppError = require('./utils/appError');
 const isLoggedIn = require('./middlewares/auth.middlewares');
 const userRouter = require('./routes/user.routes');
@@ -64,18 +59,4 @@ app.all('*', (req, res, next) => {
 
 app.use(errorGlobalHandler);
 
-const { PORT = 3000 } = process.env.PORT;
-
-const start = () => {
-    try {
-        app.listen(PORT, () => {
-            log.green('SERVER STATE', `Server is running on port: ${PORT}`);
-        });
-    } catch (error) {
-        log.red('SERVER STATE', error);
-        process.exit(1);
-    }
-};
-
-connect();
-start();
+module.exports = app;

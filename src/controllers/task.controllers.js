@@ -65,7 +65,9 @@ exports.updateTask = catchAsync(async (req, res) => {
     const { taskId } = req.params;
     const user = req.user;
     const { title, isDone, times, timesDone, note } = req.body;
-    utils.checkIfFieldsExist(next, title, isDone, times, timesDone);
+    if (utils.checkIfFieldsExist(next, title, isDone, times, timesDone)) {
+        return;
+    }
     if (!title && !isDone && !times && !timesDone && !note) {
         return next(
             new AppError(

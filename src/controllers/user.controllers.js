@@ -30,7 +30,8 @@ const { JWT_SECRET, JWT_EXPIRES_IN, BCRYPT_SALT, PORT, IMG_FOLDER } =
 const checkIfFieldsAreNotEmpty = (next, ...fields) => {
     const isNotValid = fields.some(field => !(field.length >= 5));
     if (isNotValid) {
-        return next(new AppError('Please provide valid data', 400));
+        next(new AppError('Please provide valid data', 400));
+        return false;
     }
 };
 
@@ -40,18 +41,20 @@ const signToken = id => {
 
 const checkIfUserPasswordCorrect = async (next, user, assumedPassword) => {
     if (!user || !(await user.checkPassword(assumedPassword, user.password))) {
-        return next(new AppError('Incorrect email or password', 401));
+        next(new AppError('Incorrect email or password', 401));
+        return false;
     }
 };
 
 const checkIfPasswordsAreTheSame = (next, password1, password2) => {
     if (password1 !== password2) {
-        return next(
+        next(
             new AppError(
                 'Passwords are different, please provide valid passwords',
                 400
             )
         );
+        return false;
     }
 };
 
@@ -89,9 +92,16 @@ const createResetToken = async () => {
 exports.signup = catchAsync(async (req, res, next) => {
     const { email, password, passwordConfirm } = req.body;
 
-    utils.checkIfFieldsExist(next, email, password, passwordConfirm);
-    checkIfFieldsAreNotEmpty(next, email, password, passwordConfirm);
-    checkIfPasswordsAreTheSame(next, password, passwordConfirm);
+    if (!utils.checkIfFieldsExist(next, email, password, passwordConfirm)) {
+        return;
+    }
+    if (!checkIfFieldsAreNotEmpty(next, email, password, passwordConfirm)) {
+        return;
+    }
+    if (!checkIfPasswordsAreTheSame(next, password, passwordConfirm)) {
+        return;
+    }
+
     await User.create({ email, password });
     res.redirect(201, '/login');
 });
@@ -99,10 +109,18 @@ exports.signup = catchAsync(async (req, res, next) => {
 exports.login = catchAsync(async (req, res, next) => {
     const { email, password } = req.body;
 
-    utils.checkIfFieldsExist(next, email, password);
-    checkIfFieldsAreNotEmpty(next, email, password);
+    if (!utils.checkIfFieldsExist(next, email, password)) {
+        return;
+    }
+    if (!checkIfFieldsAreNotEmpty(next, email, password)) {
+        return;
+    }
+
     const user = await User.findOne({ email }).select('+password -__v');
-    await checkIfUserPasswordCorrect(next, user, password);
+
+    if (!(await checkIfUserPasswordCorrect(next, user, password))) {
+        return;
+    }
 
     res.cookie('token', signToken(user._id), {
         expires: new Date(
@@ -122,42 +140,61 @@ exports.delete = catchAsync(async (req, res, next) => {
     const user = req.user;
     const { password } = req.body;
 
-    utils.checkIfFieldsExist(next, password);
-    checkIfFieldsAreNotEmpty(next, password);
-    await checkIfUserPasswordCorrect(next, user, password);
+    if (!utils.checkIfFieldsExist(next, password)) {
+        return;
+    }
+    if (!checkIfFieldsAreNotEmpty(next, password)) {
+        return;
+    }
+    if (!(await checkIfUserPasswordCorrect(next, user, password))) {
+        return;
+    }
     try {
         const photoPath = user.profilePicture;
         await fs.unlink(path.resolve(__dirname, '..', photoPath));
     } catch {}
+
     await user.deleteOne();
     res.clearCookie('token');
 
     res.redirect(204, '/');
 });
 
-exports.logout = catchAsync(async (req, res) => {
+exports.logout = (req, res) => {
     res.clearCookie('token');
     res.redirect('/');
-});
+};
 
 exports.updatePassword = catchAsync(async (req, res, next) => {
     const user = req.user;
     const { passwordConfirm, newPassword, newPasswordConfirm } = req.body;
-    utils.checkIfFieldsExist(
-        next,
-        passwordConfirm,
-        newPassword,
-        newPasswordConfirm
-    );
-    checkIfFieldsAreNotEmpty(
-        next,
-        passwordConfirm,
-        newPassword,
-        newPasswordConfirm
-    );
+    if (
+        !utils.checkIfFieldsExist(
+            next,
+            passwordConfirm,
+            newPassword,
+            newPasswordConfirm
+        )
+    ) {
+        return;
+    }
+    if (
+        !checkIfFieldsAreNotEmpty(
+            next,
+            passwordConfirm,
+            newPassword,
+            newPasswordConfirm
+        )
+    ) {
+        return;
+    }
 
-    await checkIfUserPasswordCorrect(next, user, passwordConfirm);
-    checkIfPasswordsAreTheSame(next, newPassword, newPasswordConfirm);
+    if (!(await checkIfUserPasswordCorrect(next, user, passwordConfirm))) {
+        return;
+    }
+    if (!checkIfPasswordsAreTheSame(next, newPassword, newPasswordConfirm)) {
+        return;
+    }
     if (passwordConfirm === newPassword) {
         return next(
             new AppError(
@@ -209,9 +246,15 @@ exports.resetPassword = catchAsync(async (req, res) => {
         return next(new AppError('Token is invalid or has expired', 400));
     }
 
-    utils.checkIfFieldsExist(next, newPassword, newPasswordConfirm);
-    checkIfFieldsAreNotEmpty(next, newPassword, newPasswordConfirm);
-    checkIfPasswordsAreTheSame(next, newPassword, newPasswordConfirm);
+    if (!utils.checkIfFieldsExist(next, newPassword, newPasswordConfirm)) {
+        return;
+    }
+    if (!checkIfFieldsAreNotEmpty(next, newPassword, newPasswordConfirm)) {
+        return;
+    }
+    if (!checkIfPasswordsAreTheSame(next, newPassword, newPasswordConfirm)) {
+        return;
+    }
 
     const user = await User.findById(token.userId);
     user.password = newPassword;
